@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/Snoksik/task-manager/internal/model"
@@ -33,12 +34,37 @@ func (r *TaskRepository) GetByID(id int) (model.Task, error) {
 
 	return r.tasks[i], nil
 }
-func (r *TaskRepository) GetAll() []model.Task {
+
+func search(str string, r []model.Task) []model.Task {
+	result := make([]model.Task, 0)
+
+	for _, task := range r {
+		if strings.Contains(task.Name, str) {
+			result = append(result, task)
+		}
+	}
+
+	return result
+}
+
+func (r *TaskRepository) GetAll(filter model.TaskFilter) ([]model.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	result := make([]model.Task, len(r.tasks))
-	copy(result, r.tasks)
-	return result
+
+	searchResult := search(filter.Search, r.tasks)
+	start := filter.Offset
+	end := filter.Limit + filter.Offset
+
+	if start > len(searchResult) {
+		return []model.Task{}, nil
+	}
+	if end >= len(searchResult) {
+		end = len(searchResult)
+	}
+
+	result := searchResult[start:end]
+
+	return result, nil
 }
 
 func (r *TaskRepository) Create(task model.Task) model.Task {

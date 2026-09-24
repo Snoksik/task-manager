@@ -9,7 +9,7 @@ import (
 type TaskRepository interface {
 	Create(task model.Task) model.Task
 	Update(id int, task model.Task) (model.Task, error)
-	GetAll() []model.Task
+	GetAll(filter model.TaskFilter) ([]model.Task, error)
 	GetByID(id int) (model.Task, error)
 	Delete(id int) error
 }
@@ -43,8 +43,11 @@ func (s *TaskService) Update(id int, task model.Task) (model.Task, error) {
 	return s.repo.Update(id, task)
 }
 
-func (s *TaskService) GetAll() []model.Task {
-	return s.repo.GetAll()
+func (s *TaskService) GetAll(filter model.TaskFilter) ([]model.Task, error) {
+	if filter.Limit < 1 || filter.Limit > 100 || filter.Offset < 0 {
+		return []model.Task{}, model.ErrInvalidTaskFilter
+	}
+	return s.repo.GetAll(filter)
 }
 
 func (s *TaskService) GetByID(id int) (model.Task, error) {

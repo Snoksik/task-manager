@@ -36,7 +36,7 @@ func (t *taskServiceStub) GetByID(id int) (model.Task, error) {
 	t.getByIDCalls += 1
 	return t.getByIDResult, t.getByIDErr
 }
-func (s *taskServiceStub) GetAll() []model.Task {
+func (s *taskServiceStub) GetAll(model.TaskFilter) []model.Task {
 	return s.tasks
 }
 

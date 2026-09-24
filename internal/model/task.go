@@ -5,3 +5,9 @@ type Task struct {
 	Name   string `json:"name"`
 	UserID int64  `json:"user_id"`
 }
+
+type TaskFilter struct {
+	Search string
+	Limit  int
+	Offset int
+}

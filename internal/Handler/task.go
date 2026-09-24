@@ -13,7 +13,7 @@ import (
 )
 
 type TaskService interface {
-	GetAll() []model.Task
+	GetAll(filter model.TaskFilter) ([]model.Task, error)
 	GetByID(id int) (model.Task, error)
 	Create(task model.Task) (model.Task, error)
 	Delete(id int) error
@@ -29,9 +29,57 @@ func NewTaskHandler(service TaskService) *TaskHandler {
 		service: service,
 	}
 }
+func parseQueryParams(r *http.Request) (model.TaskFilter, error) {
+	query := r.URL.Query()
+	search := query.Get("search")
+	limitStr := query.Get("limit")
+	offsetStr := query.Get("offset")
+
+	limit := 10
+	offset := 0
+
+	if limitStr != "" {
+		parseLimit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			return model.TaskFilter{}, err
+		}
+		limit = parseLimit
+	}
+	if offsetStr != "" {
+		parseOffset, err := strconv.Atoi(offsetStr)
+		if err != nil {
+			return model.TaskFilter{}, err
+		}
+		offset = parseOffset
+	}
+
+	filter := model.TaskFilter{
+		Search: search,
+		Limit:  limit,
+		Offset: offset,
+	}
+
+	return filter, nil
+
+}
 
 func (h *TaskHandler) GetAll(w http.ResponseWriter, r *http.Request) {
-	tasks := h.service.GetAll()
+	filter, err := parseQueryParams(r)
+	if err != nil {
+		http.Error(w, model.ErrInvalidTaskFilter.Error(), 400)
+		return
+	}
+
+	tasks, err := h.service.GetAll(filter)
+	if err != nil {
+		switch {
+		case errors.Is(err, model.ErrInvalidTaskFilter):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 
