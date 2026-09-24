@@ -418,3 +418,52 @@ func TestGetByIDInvalidID(t *testing.T) {
 	}
 
 }
+
+//POST /tasks с пустым name
+//- ожидаемый результат: 400 Bad Request
+
+func TestCreateEmptyName(t *testing.T) {
+	svc := &taskServiceStub{
+		createErr: model.ErrInvalidTaskName,
+	}
+	h := NewTaskHandler(svc)
+	reader := strings.NewReader(`{"name":""}`)
+
+	req := httptest.NewRequest("POST", "/tasks/1", reader)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != 400 {
+		t.Fatalf("expected status 400, got %d ", rec.Code)
+	}
+
+}
+
+// PUT /tasks/{id} для несуществующей задачи
+// - ожидаемый результат: 404 Not Found
+
+func TestUpdateTaskNotFound(t *testing.T) {
+	svc := &taskServiceStub{
+		updateErr: model.ErrTaskNotFound,
+	}
+
+	h := NewTaskHandler(svc)
+
+	reader := strings.NewReader(`{"name":"ууу"}`)
+
+	req := httptest.NewRequest("PUT", "/tasks/27", reader)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.SetPathValue("id", "27")
+
+	rec := httptest.NewRecorder()
+
+	h.Update(rec, req)
+
+	if rec.Code != 404 {
+		t.Fatalf("Expected status 404, got %d", rec.Code)
+	}
+
+}
