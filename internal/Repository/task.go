@@ -18,8 +18,9 @@ func NewTaskRepository() *TaskRepository {
 		tasks: []model.Task{
 			{ID: 1, Name: "Изучить net/http", UserID: 1},
 			{ID: 2, Name: "Сделать REST API", UserID: 2},
+			{ID: 3, Name: "Сделать REST ", UserID: 3},
 		},
-		nextID: 3,
+		nextID: 4,
 	}
 
 }

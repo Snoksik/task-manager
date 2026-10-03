@@ -44,8 +44,8 @@ func TestCreateAfterDelete(t *testing.T) {
 
 	created := repo.Create(model.Task{Name: "Новая задача"})
 
-	if created.ID != 3 {
-		t.Errorf("expected new task ID 3, got %d", created.ID)
+	if created.ID != 4 {
+		t.Errorf("expected new task ID 4, got %d", created.ID)
 	}
 	task, err := repo.GetByID(2)
 	if err != nil {
@@ -140,26 +140,37 @@ func TestConcurrentCreate(t *testing.T) {
 	}
 
 	wg.Wait()
-	result := repo.GetAll()
+	filter := model.TaskFilter{
+		Limit: 200,
+	}
+	result, err := repo.GetAll(filter)
+	if err != nil {
+		t.Fatalf("epxected zero errors, got %v", err)
+	}
 	m := make(map[int]struct{})
 
 	for i := range result {
 		m[result[i].ID] = struct{}{}
 	}
 
-	if len(m) != 102 {
-		t.Fatalf("expected 102 unicum id, got %d", len(m))
+	if len(m) != 103 {
+		t.Fatalf("expected 103 unicum id, got %d", len(m))
 	}
-	if len(result) != 102 {
-		t.Fatalf("expected 102, got %d", len(result))
+	if len(result) != 103 {
+		t.Fatalf("expected 103, got %d", len(result))
 	}
 
 }
 
 func TestGetAllReturnsCopy(t *testing.T) {
 	repo := NewTaskRepository()
-
-	result := repo.GetAll()
+	filter := model.TaskFilter{
+		Limit: 200,
+	}
+	result, err := repo.GetAll(filter)
+	if err != nil {
+		t.Fatalf("epxected zero errors, got %v", err)
+	}
 
 	if len(result) == 0 {
 		t.Fatalf("expected tasks > 0, got %d", len(result))
@@ -184,13 +195,18 @@ func TestConcurrentReadWrite(t *testing.T) {
 	repo := NewTaskRepository()
 
 	wg := sync.WaitGroup{}
-
+	filter := model.TaskFilter{
+		Limit: 200,
+	}
 	for range 100 {
 		wg.Go(func() {
 			repo.Create(model.Task{})
 		})
 		wg.Go(func() {
-			result := repo.GetAll()
+			result, err := repo.GetAll(filter)
+			if err != nil {
+				t.Fatalf("epxected zero errors, got %v", err)
+			}
 			for i := range result {
 				if result[i].ID <= 0 {
 					t.Errorf("expected id > 0, got %d", result[i].ID)
@@ -201,8 +217,106 @@ func TestConcurrentReadWrite(t *testing.T) {
 
 	wg.Wait()
 
-	result := repo.GetAll()
-	if len(result) != 102 {
-		t.Fatalf("expected 102, got %d", len(result))
+	result, err := repo.GetAll(filter)
+	if err != nil {
+		t.Fatalf("epxected zero errors, got %v", err)
+	}
+	if len(result) != 103 {
+		t.Fatalf("expected 103, got %d", len(result))
+	}
+}
+
+func TestGetAllFilterBySearch(t *testing.T) {
+	repo := NewTaskRepository()
+
+	filter := model.TaskFilter{
+		Search: "API",
+		Limit:  200,
+	}
+	result, err := repo.GetAll(filter)
+	if err != nil {
+		t.Fatalf("expected zero errors, got %v", err)
+	}
+	need := model.Task{
+		ID:     2,
+		Name:   "Сделать REST API",
+		UserID: 2,
+	}
+	if len(result) != 1 {
+		t.Fatalf("Expected len 1, got %d", len(result))
+	}
+	if result[0] != need {
+		t.Fatalf("expected %+v, got %+v", need, result[0])
+	}
+}
+
+func TestGetAllWithPagination(t *testing.T) {
+	repo := NewTaskRepository()
+
+	filter := model.TaskFilter{
+		Offset: 1,
+		Limit:  2,
+	}
+
+	result, err := repo.GetAll(filter)
+	if err != nil {
+		t.Fatalf("expected zero errors, got %v", err)
+	}
+	need := []model.Task{
+		{ID: 2, Name: "Сделать REST API", UserID: 2},
+		{ID: 3, Name: "Сделать REST ", UserID: 3},
+	}
+	if len(result) != len(need) {
+		t.Fatalf("expected len %d, got %d", len(need), len(result))
+	}
+	for i := range result {
+		if result[i] != need[i] {
+			t.Fatalf("expected %+v, got %+v", need, result)
+		}
+
+	}
+
+}
+
+func TestGetAllOffsetBeyondResult(t *testing.T) {
+	repo := NewTaskRepository()
+
+	filter := model.TaskFilter{
+		Offset: 100,
+		Limit:  10,
+	}
+
+	result, err := repo.GetAll(filter)
+	if err != nil {
+		t.Fatalf("expected zero errors, got %v", err)
+	}
+
+	if len(result) != 0 {
+		t.Fatalf("expected len %d, got %d", 0, len(result))
+	}
+}
+
+func TestGetAllLimitExceedsRemainingTasks(t *testing.T) {
+	repo := NewTaskRepository()
+
+	filter := model.TaskFilter{
+		Offset: 2,
+		Limit:  10,
+	}
+
+	result, err := repo.GetAll(filter)
+	if err != nil {
+		t.Fatalf("expected zero errors, got %v", err)
+	}
+	need := model.Task{
+		ID:     3,
+		Name:   "Сделать REST ",
+		UserID: 3,
+	}
+	if len(result) != 1 {
+		t.Fatalf("expected len %d, got %d", 1, len(result))
+	}
+	if result[0] != need {
+		t.Fatalf("expected %+v, got %+v", need, result[0])
 	}
 }

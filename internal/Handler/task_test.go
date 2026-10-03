@@ -29,6 +29,12 @@ type taskServiceStub struct {
 	updateInputTask model.Task
 	updateResult    model.Task
 	updateErr       error
+
+	Filter       model.TaskFilter
+	resultFilter model.TaskFilter
+	filterError  error
+
+	getAllCalls int
 }
 
 func (t *taskServiceStub) GetByID(id int) (model.Task, error) {
@@ -36,8 +42,10 @@ func (t *taskServiceStub) GetByID(id int) (model.Task, error) {
 	t.getByIDCalls += 1
 	return t.getByIDResult, t.getByIDErr
 }
-func (s *taskServiceStub) GetAll(model.TaskFilter) []model.Task {
-	return s.tasks
+func (s *taskServiceStub) GetAll(filter model.TaskFilter) ([]model.Task, error) {
+	s.resultFilter = filter
+	s.getAllCalls++
+	return s.tasks, s.filterError
 }
 
 func (s *taskServiceStub) Create(m model.Task) (model.Task, error) {
@@ -466,4 +474,74 @@ func TestUpdateTaskNotFound(t *testing.T) {
 		t.Fatalf("Expected status 404, got %d", rec.Code)
 	}
 
+}
+
+func TestGetAllUsesDefaultPagination(t *testing.T) {
+	svc := &taskServiceStub{
+		Filter: model.TaskFilter{
+			Offset: 0,
+			Limit:  10,
+		},
+	}
+
+	h := NewTaskHandler(svc)
+
+	req := httptest.NewRequest("GET", "/tasks", nil)
+
+	rec := httptest.NewRecorder()
+
+	h.GetAll(rec, req)
+	if svc.resultFilter != svc.Filter {
+		t.Fatalf("expected %+v filter, got %+v", svc.Filter, svc.resultFilter)
+	}
+
+}
+func TestGetAllReturnsBadRequestForInvalidOffset(t *testing.T) {
+	svc := &taskServiceStub{}
+
+	h := NewTaskHandler(svc)
+	req := httptest.NewRequest("GET", "/tasks?offset=abc", nil)
+	rec := httptest.NewRecorder()
+
+	h.GetAll(rec, req)
+
+	if svc.getAllCalls != 0 {
+		t.Fatalf("expected zero calls service, got %d", svc.getAllCalls)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", rec.Code)
+	}
+}
+
+func TestGetAllReturnsBadRequestForInvalidLimit(t *testing.T) {
+	svc := &taskServiceStub{}
+
+	h := NewTaskHandler(svc)
+	req := httptest.NewRequest("GET", "/tasks?limit=abc", nil)
+	rec := httptest.NewRecorder()
+
+	h.GetAll(rec, req)
+
+	if svc.getAllCalls != 0 {
+		t.Fatalf("expected zero calls service, got %d", svc.getAllCalls)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", rec.Code)
+	}
+}
+
+func TestGetAllReturnsBadRequestForOutOfRangeLimit(t *testing.T) {
+	svc := &taskServiceStub{
+		filterError: model.ErrInvalidTaskFilter,
+	}
+
+	h := NewTaskHandler(svc)
+	req := httptest.NewRequest("GET", "/tasks?limit=101", nil)
+	rec := httptest.NewRecorder()
+
+	h.GetAll(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", rec.Code)
+	}
 }
