@@ -42,8 +42,10 @@ func TestCreateAfterDelete(t *testing.T) {
 		t.Fatalf("failed to prepare test: %v", err)
 	}
 
-	created := repo.Create(model.Task{Name: "Новая задача"})
-
+	created, err := repo.Create(model.Task{Name: "Новая задача"})
+	if err != nil {
+		t.Fatalf("expected zero error, got %v", err)
+	}
 	if created.ID != 4 {
 		t.Errorf("expected new task ID 4, got %d", created.ID)
 	}

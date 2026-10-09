@@ -68,7 +68,7 @@ func (r *TaskRepository) GetAll(filter model.TaskFilter) ([]model.Task, error) {
 	return result, nil
 }
 
-func (r *TaskRepository) Create(task model.Task) model.Task {
+func (r *TaskRepository) Create(task model.Task) (model.Task, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	task.ID = r.nextID
@@ -77,7 +77,7 @@ func (r *TaskRepository) Create(task model.Task) model.Task {
 
 	r.tasks = append(r.tasks, task)
 
-	return task
+	return task, nil
 
 }
 

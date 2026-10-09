@@ -7,7 +7,7 @@ import (
 )
 
 type TaskRepository interface {
-	Create(task model.Task) model.Task
+	Create(task model.Task) (model.Task, error)
 	Update(id int, task model.Task) (model.Task, error)
 	GetAll(filter model.TaskFilter) ([]model.Task, error)
 	GetByID(id int) (model.Task, error)
@@ -31,7 +31,11 @@ func (s *TaskService) Create(task model.Task) (model.Task, error) {
 	}
 
 	task.Name = name
-	return s.repo.Create(task), nil
+	result, err := s.repo.Create(task)
+	if err != nil {
+		return model.Task{}, err
+	}
+	return result, nil
 }
 
 func (s *TaskService) Update(id int, task model.Task) (model.Task, error) {

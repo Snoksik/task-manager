@@ -63,10 +63,10 @@ type taskRepositorySpy struct {
 	createResult model.Task
 }
 
-func (s *taskRepositorySpy) Create(task model.Task) model.Task {
+func (s *taskRepositorySpy) Create(task model.Task) (model.Task, error) {
 	s.createCalls++
 	s.createInput = task
-	return s.createResult
+	return s.createResult, nil
 }
 
 func TestCreateInvalidName(t *testing.T) {
