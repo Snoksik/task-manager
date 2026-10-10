@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"strings"
 	"sync"
 
@@ -25,7 +26,7 @@ func NewTaskRepository() *TaskRepository {
 
 }
 
-func (r *TaskRepository) GetByID(id int) (model.Task, error) {
+func (r *TaskRepository) GetByID(ctx context.Context, id int) (model.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	i, err := r.findIndex(id)
@@ -48,7 +49,7 @@ func search(str string, r []model.Task) []model.Task {
 	return result
 }
 
-func (r *TaskRepository) GetAll(filter model.TaskFilter) ([]model.Task, error) {
+func (r *TaskRepository) GetAll(ctx context.Context, filter model.TaskFilter) ([]model.Task, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -68,7 +69,7 @@ func (r *TaskRepository) GetAll(filter model.TaskFilter) ([]model.Task, error) {
 	return result, nil
 }
 
-func (r *TaskRepository) Create(task model.Task) (model.Task, error) {
+func (r *TaskRepository) Create(ctx context.Context, task model.Task) (model.Task, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	task.ID = r.nextID
@@ -81,7 +82,7 @@ func (r *TaskRepository) Create(task model.Task) (model.Task, error) {
 
 }
 
-func (r *TaskRepository) Update(id int, task model.Task) (model.Task, error) {
+func (r *TaskRepository) Update(ctx context.Context, id int, task model.Task) (model.Task, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	i, err := r.findIndex(id)
@@ -104,7 +105,7 @@ func (r *TaskRepository) findIndex(id int) (int, error) {
 	return -1, model.ErrTaskNotFound
 }
 
-func (r *TaskRepository) Delete(id int) error {
+func (r *TaskRepository) Delete(ctx context.Context, id int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	i, err := r.findIndex(id)

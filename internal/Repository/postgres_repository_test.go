@@ -13,6 +13,7 @@ import (
 )
 
 func TestPostgresRepository_CreateAndGetByID(t *testing.T) {
+	ctx := context.Background()
 	repo, pool := setupPostgresRepository(t)
 
 	input := model.Task{
@@ -20,7 +21,7 @@ func TestPostgresRepository_CreateAndGetByID(t *testing.T) {
 		UserID: 42,
 	}
 
-	result, err := repo.Create(input)
+	result, err := repo.Create(ctx, input)
 	if err != nil {
 		t.Fatalf("expected zero error, got %v", err)
 	}
@@ -28,7 +29,7 @@ func TestPostgresRepository_CreateAndGetByID(t *testing.T) {
 		t.Fatalf("expected id not 0, got 0")
 	}
 
-	result_2, err := repo.GetByID(result.ID)
+	result_2, err := repo.GetByID(ctx, result.ID)
 
 	t.Cleanup(func() {
 		_, err := pool.Exec(
@@ -51,9 +52,10 @@ func TestPostgresRepository_CreateAndGetByID(t *testing.T) {
 }
 
 func TestPostgresRepository_GetByIDNotFound(t *testing.T) {
+	ctx := context.Background()
 	repo, _ := setupPostgresRepository(t)
 
-	_, err := repo.GetByID(999999999)
+	_, err := repo.GetByID(ctx, 999999999)
 	if !errors.Is(err, model.ErrTaskNotFound) {
 		t.Fatalf("expected error: %v , got: %v", model.ErrTaskNotFound, err)
 	}
@@ -61,9 +63,10 @@ func TestPostgresRepository_GetByIDNotFound(t *testing.T) {
 }
 
 func TestPostgresRepository_Update(t *testing.T) {
+	ctx := context.Background()
 	repo, pool := setupPostgresRepository(t)
 
-	created, err := repo.Create(model.Task{Name: "wow", UserID: 5})
+	created, err := repo.Create(ctx, model.Task{Name: "wow", UserID: 5})
 	if err != nil {
 		t.Fatalf("expected zero errors with create, got %v", err)
 	}
@@ -77,7 +80,7 @@ func TestPostgresRepository_Update(t *testing.T) {
 			t.Errorf("cleanup task: %v", err)
 		}
 	})
-	updated, err := repo.Update(created.ID, model.Task{Name: "new", UserID: 10})
+	updated, err := repo.Update(ctx, created.ID, model.Task{Name: "new", UserID: 10})
 	if err != nil {
 		t.Fatalf("expected zero errors with update, got %v", err)
 	}
@@ -92,7 +95,7 @@ func TestPostgresRepository_Update(t *testing.T) {
 		t.Fatalf("expected user id %d, got %d", 10, updated.UserID)
 	}
 
-	stored, err := repo.GetByID(created.ID)
+	stored, err := repo.GetByID(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("expected zero errors with get by id, got %v", err)
 	}
@@ -102,18 +105,20 @@ func TestPostgresRepository_Update(t *testing.T) {
 }
 
 func TestPostgresRepository_UpdateNotFound(t *testing.T) {
+	ctx := context.Background()
 	repo, _ := setupPostgresRepository(t)
 
-	_, err := repo.Update(-1, model.Task{Name: "new", UserID: 10})
+	_, err := repo.Update(ctx, -1, model.Task{Name: "new", UserID: 10})
 	if !errors.Is(err, model.ErrTaskNotFound) {
 		t.Fatalf("expected %v, got %v", model.ErrTaskNotFound, err)
 	}
 }
 
 func TestPostgresRepository_Delete(t *testing.T) {
+	ctx := context.Background()
 	repo, pool := setupPostgresRepository(t)
 
-	created, err := repo.Create(model.Task{Name: "new", UserID: 10})
+	created, err := repo.Create(ctx, model.Task{Name: "new", UserID: 10})
 	if err != nil {
 		t.Fatalf("expected zero errors with created, got %v", err)
 	}
@@ -129,11 +134,11 @@ func TestPostgresRepository_Delete(t *testing.T) {
 		}
 	})
 
-	err = repo.Delete(created.ID)
+	err = repo.Delete(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("expected zero errors with Delete, got %v", err)
 	}
-	_, err = repo.GetByID(created.ID)
+	_, err = repo.GetByID(ctx, created.ID)
 	if !errors.Is(err, model.ErrTaskNotFound) {
 		t.Fatalf("expected no found id after delete")
 	}
@@ -141,20 +146,22 @@ func TestPostgresRepository_Delete(t *testing.T) {
 }
 
 func TestPostgresRepository_DeleteNotFound(t *testing.T) {
+	ctx := context.Background()
 	repo, _ := setupPostgresRepository(t)
 
-	err := repo.Delete(-1)
+	err := repo.Delete(ctx, -1)
 	if !errors.Is(err, model.ErrTaskNotFound) {
 		t.Fatalf("expected error: %v", model.ErrTaskNotFound)
 	}
 }
 
 func TestPostgresRepository_GetAll(t *testing.T) {
+	ctx := context.Background()
 	repo, pool := setupPostgresRepository(t)
 
 	marker := fmt.Sprintf("getall-%d", time.Now().UnixNano())
 
-	first, err := repo.Create(model.Task{
+	first, err := repo.Create(ctx, model.Task{
 		Name:   marker + " first",
 		UserID: 1,
 	})
@@ -173,7 +180,7 @@ func TestPostgresRepository_GetAll(t *testing.T) {
 		}
 	})
 
-	second, err := repo.Create(model.Task{
+	second, err := repo.Create(ctx, model.Task{
 		Name:   marker + " second",
 		UserID: 1,
 	})
@@ -191,7 +198,7 @@ func TestPostgresRepository_GetAll(t *testing.T) {
 			t.Errorf("cleanup task: %v", err)
 		}
 	})
-	third, err := repo.Create(model.Task{
+	third, err := repo.Create(ctx, model.Task{
 		Name:   marker + " third",
 		UserID: 1,
 	})
@@ -210,7 +217,7 @@ func TestPostgresRepository_GetAll(t *testing.T) {
 		}
 	})
 
-	tasks, err := repo.GetAll(model.TaskFilter{Search: marker, Limit: 2, Offset: 1})
+	tasks, err := repo.GetAll(ctx, model.TaskFilter{Search: marker, Limit: 2, Offset: 1})
 	if err != nil {
 		t.Fatalf("expected zero error with get all, got %v", err)
 	}
@@ -245,9 +252,10 @@ func setupPostgresRepository(t *testing.T) (*PostgresRepository, *pgxpool.Pool) 
 }
 
 func TestPostgresRepository_GetAllEmpty(t *testing.T) {
+	ctx := context.Background()
 	repo, _ := setupPostgresRepository(t)
 
-	tasks, err := repo.GetAll(model.TaskFilter{
+	tasks, err := repo.GetAll(ctx, model.TaskFilter{
 		Search: "какая-то гарантированно отсутствующая строка",
 		Limit:  10,
 		Offset: 0,
@@ -257,5 +265,17 @@ func TestPostgresRepository_GetAllEmpty(t *testing.T) {
 	}
 	if len(tasks) != 0 {
 		t.Fatalf("expected len tasks = 0, got %d", len(tasks))
+	}
+}
+
+func TestPostgresRepository_CreateWithCanceledContext(t *testing.T) {
+	repo, _ := setupPostgresRepository(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := repo.Create(ctx, model.Task{Name: "ao", UserID: 12})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected error: context.Canceled, got %v", err)
 	}
 }

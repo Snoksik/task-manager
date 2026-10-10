@@ -20,8 +20,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	}
 }
 
-func (r *PostgresRepository) Create(task model.Task) (model.Task, error) {
-	ctx := context.Background()
+func (r *PostgresRepository) Create(ctx context.Context, task model.Task) (model.Task, error) {
 	query := `INSERT INTO tasks (name, user_id)
 		VALUES ($1, $2)
 		RETURNING id`
@@ -32,8 +31,7 @@ func (r *PostgresRepository) Create(task model.Task) (model.Task, error) {
 	return task, nil
 }
 
-func (r *PostgresRepository) GetByID(id int) (model.Task, error) {
-	ctx := context.Background()
+func (r *PostgresRepository) GetByID(ctx context.Context, id int) (model.Task, error) {
 
 	query := `SELECT id, name, user_id
 				FROM tasks
@@ -53,8 +51,7 @@ func (r *PostgresRepository) GetByID(id int) (model.Task, error) {
 	return result, nil
 }
 
-func (r *PostgresRepository) Update(id int, task model.Task) (model.Task, error) {
-	ctx := context.Background()
+func (r *PostgresRepository) Update(ctx context.Context, id int, task model.Task) (model.Task, error) {
 
 	query := `UPDATE tasks
 				SET name = $1, user_id = $2
@@ -74,8 +71,7 @@ func (r *PostgresRepository) Update(id int, task model.Task) (model.Task, error)
 	return result, nil
 }
 
-func (r *PostgresRepository) Delete(id int) error {
-	ctx := context.Background()
+func (r *PostgresRepository) Delete(ctx context.Context, id int) error {
 
 	query := `DELETE FROM tasks
 				WHERE id = $1;`
@@ -91,8 +87,7 @@ func (r *PostgresRepository) Delete(id int) error {
 	return nil
 }
 
-func (r *PostgresRepository) GetAll(filter model.TaskFilter) ([]model.Task, error) {
-	ctx := context.Background()
+func (r *PostgresRepository) GetAll(ctx context.Context, filter model.TaskFilter) ([]model.Task, error) {
 	query := `SELECT id, name, user_id FROM tasks
 				WHERE name LIKE '%' || $1 || '%'
 				ORDER BY id ASC

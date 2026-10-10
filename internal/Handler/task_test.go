@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -37,25 +38,25 @@ type taskServiceStub struct {
 	getAllCalls int
 }
 
-func (t *taskServiceStub) GetByID(id int) (model.Task, error) {
+func (t *taskServiceStub) GetByID(ctx context.Context, id int) (model.Task, error) {
 	t.getByIDInput = id
 	t.getByIDCalls += 1
 	return t.getByIDResult, t.getByIDErr
 }
-func (s *taskServiceStub) GetAll(filter model.TaskFilter) ([]model.Task, error) {
+func (s *taskServiceStub) GetAll(ctx context.Context, filter model.TaskFilter) ([]model.Task, error) {
 	s.resultFilter = filter
 	s.getAllCalls++
 	return s.tasks, s.filterError
 }
 
-func (s *taskServiceStub) Create(m model.Task) (model.Task, error) {
+func (s *taskServiceStub) Create(ctx context.Context, m model.Task) (model.Task, error) {
 	s.createCalls++
 	s.createInput = m
 
 	return s.createResult, s.createErr
 }
 
-func (s *taskServiceStub) Update(id int, task model.Task) (model.Task, error) {
+func (s *taskServiceStub) Update(ctx context.Context, id int, task model.Task) (model.Task, error) {
 	s.updateCalls++
 	s.updateInputID = id
 	s.updateInputTask = task

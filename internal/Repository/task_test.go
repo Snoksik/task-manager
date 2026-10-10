@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -9,9 +10,10 @@ import (
 )
 
 func TestGetByID(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
-	task, err := repo.GetByID(1)
+	task, err := repo.GetByID(ctx, 1)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -26,9 +28,10 @@ func TestGetByID(t *testing.T) {
 }
 
 func TestGetByIDNotFound(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
-	_, err := repo.GetByID(999)
+	_, err := repo.GetByID(ctx, 999)
 
 	if !errors.Is(err, model.ErrTaskNotFound) {
 		t.Fatalf("expected ErrTaskNotFound, got %v", err)
@@ -36,20 +39,21 @@ func TestGetByIDNotFound(t *testing.T) {
 }
 
 func TestCreateAfterDelete(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
-	if err := repo.Delete(1); err != nil {
+	if err := repo.Delete(ctx, 1); err != nil {
 		t.Fatalf("failed to prepare test: %v", err)
 	}
 
-	created, err := repo.Create(model.Task{Name: "Новая задача"})
+	created, err := repo.Create(ctx, model.Task{Name: "Новая задача"})
 	if err != nil {
 		t.Fatalf("expected zero error, got %v", err)
 	}
 	if created.ID != 4 {
 		t.Errorf("expected new task ID 4, got %d", created.ID)
 	}
-	task, err := repo.GetByID(2)
+	task, err := repo.GetByID(ctx, 2)
 	if err != nil {
 		t.Fatalf("expected no error for task 2, got %v", err)
 	}
@@ -62,9 +66,10 @@ func TestCreateAfterDelete(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
-	updated, err := repo.Update(1, model.Task{
+	updated, err := repo.Update(ctx, 1, model.Task{
 		ID:   999,
 		Name: "Обновлённая задача",
 	})
@@ -80,7 +85,7 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("dont correct name, need 'Обновлённая задача', return %s", updated.Name)
 	}
 
-	saved, err := repo.GetByID(1)
+	saved, err := repo.GetByID(ctx, 1)
 	if err != nil {
 		t.Fatalf("failed to read updated task: %v", err)
 	}
@@ -95,21 +100,22 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
-	err := repo.Delete(1)
+	err := repo.Delete(ctx, 1)
 
 	if err != nil {
 		t.Fatalf("failed delet response %v", err)
 	}
 
-	_, err = repo.GetByID(1)
+	_, err = repo.GetByID(ctx, 1)
 
 	if !errors.Is(err, model.ErrTaskNotFound) {
 		t.Fatalf("expected ErrTaskNotFound after deletion, got %v", err)
 	}
 
-	task, err := repo.GetByID(2)
+	task, err := repo.GetByID(ctx, 2)
 
 	if err != nil {
 		t.Fatalf("expected not errors, got %v", err)
@@ -123,7 +129,7 @@ func TestDelete(t *testing.T) {
 		t.Errorf("dont correct name, need 'Сделать REST API', return %s", task.Name)
 	}
 
-	err = repo.Delete(1)
+	err = repo.Delete(ctx, 1)
 
 	if !errors.Is(err, model.ErrTaskNotFound) {
 		t.Fatalf("expected ErrTaskNotFound after deletion, got %v", err)
@@ -131,13 +137,14 @@ func TestDelete(t *testing.T) {
 }
 
 func TestConcurrentCreate(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
 	wg := sync.WaitGroup{}
 
 	for range 100 {
 		wg.Go(func() {
-			repo.Create(model.Task{})
+			repo.Create(ctx, model.Task{})
 		})
 	}
 
@@ -145,7 +152,7 @@ func TestConcurrentCreate(t *testing.T) {
 	filter := model.TaskFilter{
 		Limit: 200,
 	}
-	result, err := repo.GetAll(filter)
+	result, err := repo.GetAll(ctx, filter)
 	if err != nil {
 		t.Fatalf("epxected zero errors, got %v", err)
 	}
@@ -165,11 +172,12 @@ func TestConcurrentCreate(t *testing.T) {
 }
 
 func TestGetAllReturnsCopy(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 	filter := model.TaskFilter{
 		Limit: 200,
 	}
-	result, err := repo.GetAll(filter)
+	result, err := repo.GetAll(ctx, filter)
 	if err != nil {
 		t.Fatalf("epxected zero errors, got %v", err)
 	}
@@ -181,7 +189,7 @@ func TestGetAllReturnsCopy(t *testing.T) {
 
 	result[0].Name = "another"
 
-	r, err := repo.GetByID(id)
+	r, err := repo.GetByID(ctx, id)
 	if err != nil {
 		t.Fatalf("expected zero error, got %v", err)
 	}
@@ -194,6 +202,7 @@ func TestGetAllReturnsCopy(t *testing.T) {
 }
 
 func TestConcurrentReadWrite(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
 	wg := sync.WaitGroup{}
@@ -202,10 +211,10 @@ func TestConcurrentReadWrite(t *testing.T) {
 	}
 	for range 100 {
 		wg.Go(func() {
-			repo.Create(model.Task{})
+			repo.Create(ctx, model.Task{})
 		})
 		wg.Go(func() {
-			result, err := repo.GetAll(filter)
+			result, err := repo.GetAll(ctx, filter)
 			if err != nil {
 				t.Fatalf("epxected zero errors, got %v", err)
 			}
@@ -219,7 +228,7 @@ func TestConcurrentReadWrite(t *testing.T) {
 
 	wg.Wait()
 
-	result, err := repo.GetAll(filter)
+	result, err := repo.GetAll(ctx, filter)
 	if err != nil {
 		t.Fatalf("epxected zero errors, got %v", err)
 	}
@@ -229,13 +238,14 @@ func TestConcurrentReadWrite(t *testing.T) {
 }
 
 func TestGetAllFilterBySearch(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
 	filter := model.TaskFilter{
 		Search: "API",
 		Limit:  200,
 	}
-	result, err := repo.GetAll(filter)
+	result, err := repo.GetAll(ctx, filter)
 	if err != nil {
 		t.Fatalf("expected zero errors, got %v", err)
 	}
@@ -253,6 +263,7 @@ func TestGetAllFilterBySearch(t *testing.T) {
 }
 
 func TestGetAllWithPagination(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
 	filter := model.TaskFilter{
@@ -260,7 +271,7 @@ func TestGetAllWithPagination(t *testing.T) {
 		Limit:  2,
 	}
 
-	result, err := repo.GetAll(filter)
+	result, err := repo.GetAll(ctx, filter)
 	if err != nil {
 		t.Fatalf("expected zero errors, got %v", err)
 	}
@@ -281,6 +292,7 @@ func TestGetAllWithPagination(t *testing.T) {
 }
 
 func TestGetAllOffsetBeyondResult(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
 	filter := model.TaskFilter{
@@ -288,7 +300,7 @@ func TestGetAllOffsetBeyondResult(t *testing.T) {
 		Limit:  10,
 	}
 
-	result, err := repo.GetAll(filter)
+	result, err := repo.GetAll(ctx, filter)
 	if err != nil {
 		t.Fatalf("expected zero errors, got %v", err)
 	}
@@ -299,6 +311,7 @@ func TestGetAllOffsetBeyondResult(t *testing.T) {
 }
 
 func TestGetAllLimitExceedsRemainingTasks(t *testing.T) {
+	ctx := context.Background()
 	repo := NewTaskRepository()
 
 	filter := model.TaskFilter{
@@ -306,7 +319,7 @@ func TestGetAllLimitExceedsRemainingTasks(t *testing.T) {
 		Limit:  10,
 	}
 
-	result, err := repo.GetAll(filter)
+	result, err := repo.GetAll(ctx, filter)
 	if err != nil {
 		t.Fatalf("expected zero errors, got %v", err)
 	}

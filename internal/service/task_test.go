@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -61,19 +62,22 @@ type taskRepositorySpy struct {
 	createCalls  int
 	createInput  model.Task
 	createResult model.Task
+	receivedCtx  context.Context
 }
 
-func (s *taskRepositorySpy) Create(task model.Task) (model.Task, error) {
+func (s *taskRepositorySpy) Create(ctx context.Context, task model.Task) (model.Task, error) {
 	s.createCalls++
 	s.createInput = task
+	s.receivedCtx = ctx
 	return s.createResult, nil
 }
 
 func TestCreateInvalidName(t *testing.T) {
+	ctx := context.Background()
 	repo := &taskRepositorySpy{}
 	svc := NewTaskService(repo)
 
-	_, err := svc.Create(model.Task{Name: "   "})
+	_, err := svc.Create(ctx, model.Task{Name: "   "})
 
 	if !errors.Is(err, model.ErrInvalidTaskName) {
 		t.Errorf("expected ErrInvalidTaskName, got %v", err)
@@ -85,6 +89,7 @@ func TestCreateInvalidName(t *testing.T) {
 }
 
 func TestCreateValidName(t *testing.T) {
+	ctx := context.Background()
 	repo := &taskRepositorySpy{
 		createResult: model.Task{
 			ID:   42,
@@ -93,7 +98,7 @@ func TestCreateValidName(t *testing.T) {
 	}
 	svc := NewTaskService(repo)
 
-	created, err := svc.Create(model.Task{
+	created, err := svc.Create(ctx, model.Task{
 		Name: "  Купить хлеб  ",
 	})
 	if err != nil {
@@ -110,5 +115,23 @@ func TestCreateValidName(t *testing.T) {
 	}
 	if created.Name != "Купить хлеб" {
 		t.Errorf("expected  'Купить хлеб', got %s", created.Name)
+	}
+}
+
+func TestTaskServicePassesContextToRepository(t *testing.T) {
+	repo := &taskRepositorySpy{}
+	svc := NewTaskService(repo)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err := svc.Create(
+		ctx,
+		model.Task{Name: "test"},
+	)
+	if err != nil {
+		t.Fatalf("Expected zero error, got %v", err)
+	}
+	if repo.receivedCtx != ctx {
+		t.Fatalf("expected context %v, got %v", ctx, repo.receivedCtx)
 	}
 }

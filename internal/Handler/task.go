@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,11 +14,11 @@ import (
 )
 
 type TaskService interface {
-	GetAll(filter model.TaskFilter) ([]model.Task, error)
-	GetByID(id int) (model.Task, error)
-	Create(task model.Task) (model.Task, error)
-	Delete(id int) error
-	Update(id int, task model.Task) (model.Task, error)
+	GetAll(ctx context.Context, filter model.TaskFilter) ([]model.Task, error)
+	GetByID(ctx context.Context, id int) (model.Task, error)
+	Create(ctx context.Context, task model.Task) (model.Task, error)
+	Delete(ctx context.Context, id int) error
+	Update(ctx context.Context, id int, task model.Task) (model.Task, error)
 }
 
 type TaskHandler struct {
@@ -70,7 +71,7 @@ func (h *TaskHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := h.service.GetAll(filter)
+	tasks, err := h.service.GetAll(r.Context(), filter)
 	if err != nil {
 		switch {
 		case errors.Is(err, model.ErrInvalidTaskFilter):
@@ -97,7 +98,7 @@ func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := h.service.GetByID(id)
+	task, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
 		log.Printf("failed to get by id tasks response: %v", err)
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -150,7 +151,7 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	task, err := h.service.Create(body)
+	task, err := h.service.Create(r.Context(), body)
 	if err != nil {
 		code := http.StatusInternalServerError
 		switch {
@@ -177,7 +178,7 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = h.service.Delete(id); err != nil {
+	if err = h.service.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -203,7 +204,7 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := h.service.Update(id, body)
+	task, err := h.service.Update(r.Context(), id, body)
 	if err != nil {
 		switch {
 		case errors.Is(err, model.ErrInvalidTaskName):
