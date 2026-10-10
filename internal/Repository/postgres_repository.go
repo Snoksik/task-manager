@@ -52,3 +52,71 @@ func (r *PostgresRepository) GetByID(id int) (model.Task, error) {
 
 	return result, nil
 }
+
+func (r *PostgresRepository) Update(id int, task model.Task) (model.Task, error) {
+	ctx := context.Background()
+
+	query := `UPDATE tasks
+				SET name = $1, user_id = $2
+				WHERE id = $3
+				RETURNING id, name, user_id;`
+	result := model.Task{}
+	err := r.pool.QueryRow(ctx, query, task.Name, task.UserID, id).Scan(&result.ID, &result.Name, &result.UserID)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.Task{}, model.ErrTaskNotFound
+	}
+
+	if err != nil {
+		return model.Task{}, fmt.Errorf("update task by id: %w", err)
+	}
+
+	return result, nil
+}
+
+func (r *PostgresRepository) Delete(id int) error {
+	ctx := context.Background()
+
+	query := `DELETE FROM tasks
+				WHERE id = $1;`
+
+	result, err := r.pool.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("delete task by id: %w", err)
+
+	}
+	if result.RowsAffected() == 0 {
+		return model.ErrTaskNotFound
+	}
+	return nil
+}
+
+func (r *PostgresRepository) GetAll(filter model.TaskFilter) ([]model.Task, error) {
+	ctx := context.Background()
+	query := `SELECT id, name, user_id FROM tasks
+				WHERE name LIKE '%' || $1 || '%'
+				ORDER BY id ASC
+				limit $2
+				offset $3;
+				 `
+
+	rows, err := r.pool.Query(ctx, query, filter.Search, filter.Limit, filter.Offset)
+	if err != nil {
+		return []model.Task{}, fmt.Errorf("get all task: %w", err)
+	}
+	tasks := []model.Task{}
+	defer rows.Close()
+	for rows.Next() {
+		var task model.Task
+
+		err := rows.Scan(&task.ID, &task.Name, &task.UserID)
+		if err != nil {
+			return []model.Task{}, fmt.Errorf("get all task: %w", err)
+		}
+		tasks = append(tasks, task)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate tasks: %w", err)
+	}
+	return tasks, nil
+}
