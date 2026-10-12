@@ -1,0 +1,88 @@
+openapi: 3.0.3
+
+info:
+  title: Task Manager API
+  version: 1.0.0
+
+components:
+  schemas:
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        user_id:
+          type: integer
+      required:
+        - id
+        - name
+        - user_id
+        
+
+paths:
+  /tasks:
+    get:
+      summary: Получить список задач
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: 
+            type: string
+            default: ""
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          
+      responses:
+        "200":
+          description: Список задач успешно получен
+          content:
+            application/json:
+              schema:
+                type: array
+                items: 
+                  $ref: '#/components/schemas/Task'
+        "400":
+          description: Некорректные параметры фильтрации
+        "500":
+          description: Внутренняя ошибка сервера
+      
+  /tasks/{id}:
+    get:
+      summary: Получить задачу по ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор задачи
+          schema:
+            type: integer
+      responses:
+        "200": 
+          description: Задача успешно найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        "400":
+          description: Некорректный ID
+        "404": 
+          description: Задача не найдена
+        "500":
+          description: Ошибка сервера
+      

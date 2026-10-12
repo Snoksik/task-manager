@@ -77,7 +77,8 @@ func (h *TaskHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, model.ErrInvalidTaskFilter):
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		default:
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("failed to get tasks: %v", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -100,8 +101,12 @@ func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	task, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
+		if errors.Is(err, model.ErrTaskNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
 		log.Printf("failed to get by id tasks response: %v", err)
-		http.Error(w, err.Error(), http.StatusNotFound)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -153,13 +158,13 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	task, err := h.service.Create(r.Context(), body)
 	if err != nil {
-		code := http.StatusInternalServerError
-		switch {
-		case errors.Is(err, model.ErrInvalidTaskName):
-			code = http.StatusBadRequest
+		if errors.Is(err, model.ErrInvalidTaskName) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
+
 		log.Printf("failed to create task: %v", err)
-		http.Error(w, err.Error(), code)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -179,7 +184,12 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = h.service.Delete(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, model.ErrTaskNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		log.Printf("failed to delete tasks response: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
