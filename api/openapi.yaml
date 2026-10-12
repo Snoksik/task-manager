@@ -61,7 +61,35 @@ paths:
           description: Некорректные параметры фильтрации
         "500":
           description: Внутренняя ошибка сервера
-      
+    post:
+      summary: Создать новую задачу
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                user_id:
+                  type: integer
+              required:
+                - name
+                - user_id
+      responses:
+        "201":
+          description: Задача успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        "400":
+          description: Некорректные данные для создания задачи
+        "415":
+          description: Неподдерживаемый тип содержимого
+        "500":
+          description: Ошибка сервера
   /tasks/{id}:
     get:
       summary: Получить задачу по ID
@@ -85,4 +113,59 @@ paths:
           description: Задача не найдена
         "500":
           description: Ошибка сервера
-      
+    put:
+      summary: Обновить задачу по ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор задачи
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                user_id:
+                  type: integer
+              required:
+                - name
+                - user_id
+      responses:
+        "200":
+          description: Задача успешно обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        "400":
+          description: Некорректные данные для обновления задачи
+        "404": 
+          description: Задача не найдена
+        "415":
+          description: Неподдерживаемый тип содержимого
+        "500":
+          description: Ошибка сервера
+    delete:
+      summary: Удалить задачу по ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Идентификатор задачи
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Задача успешно удалена
+        "400":
+          description: Некорректный ID
+        "404":
+          description: Задача не найдена
+        "500":
+          description: Ошибка сервера
