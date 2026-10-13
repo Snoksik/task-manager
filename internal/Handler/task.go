@@ -94,11 +94,10 @@ func (h *TaskHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
+	if err != nil || id <= 0 {
 		http.Error(w, "invalid task id", http.StatusBadRequest)
 		return
 	}
-
 	task, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, model.ErrTaskNotFound) {
@@ -116,20 +115,23 @@ func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func jsonHelper(w http.ResponseWriter, r *http.Request) (model.Task, error) {
+func jsonHelper(w http.ResponseWriter, r *http.Request) (model.CreateTaskRequest, error) {
 
-	var body model.Task
+	var body model.CreateTaskRequest
 
-	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128)) //лимит на длинну json (http.MaxBytesReader(w, r.Body, 128))
-	d.DisallowUnknownFields()                                 //очень классная тема - жесткое декодирование и запрет доп данных
+	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)) //лимит на длинну json (http.MaxBytesReader(w, r.Body, 4096))
+	d.DisallowUnknownFields()                                  //очень классная тема - жесткое декодирование и запрет доп данных
 	err := d.Decode(&body)
 	if err != nil {
-		return model.Task{}, err
+		return model.CreateTaskRequest{}, err
+	}
+	if body.UserID == nil {
+		return model.CreateTaskRequest{}, errors.New("user_id is required")
 	}
 	var extra any
 	err = d.Decode(&extra)
 	if !errors.Is(err, io.EOF) {
-		return model.Task{}, errors.New("need 1 json, dont more")
+		return model.CreateTaskRequest{}, errors.New("need 1 json, dont more")
 	}
 	return body, nil
 }
@@ -156,7 +158,11 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	task, err := h.service.Create(r.Context(), body)
+	bodyTask := model.Task{
+		Name:   body.Name,
+		UserID: *body.UserID,
+	}
+	task, err := h.service.Create(r.Context(), bodyTask)
 	if err != nil {
 		if errors.Is(err, model.ErrInvalidTaskName) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -178,7 +184,7 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
+	if err != nil || id <= 0 {
 		http.Error(w, "invalid task id", http.StatusBadRequest)
 		return
 	}
@@ -203,7 +209,7 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
+	if err != nil || id <= 0 {
 		http.Error(w, "invalid task id", http.StatusBadRequest)
 		return
 	}
@@ -213,8 +219,11 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	task, err := h.service.Update(r.Context(), id, body)
+	newTask := model.Task{
+		Name:   body.Name,
+		UserID: *body.UserID,
+	}
+	task, err := h.service.Update(r.Context(), id, newTask)
 	if err != nil {
 		switch {
 		case errors.Is(err, model.ErrInvalidTaskName):

@@ -31,6 +31,8 @@ type taskServiceStub struct {
 	updateResult    model.Task
 	updateErr       error
 
+	deleteCalls int
+
 	Filter       model.TaskFilter
 	resultFilter model.TaskFilter
 	filterError  error
@@ -63,6 +65,11 @@ func (s *taskServiceStub) Update(ctx context.Context, id int, task model.Task) (
 	return s.updateResult, s.updateErr
 }
 
+func (s *taskServiceStub) Delete(ctx context.Context, id int) error {
+	s.deleteCalls++
+	return nil
+}
+
 func TestUpdateSuccess(t *testing.T) {
 	svc := &taskServiceStub{
 		updateResult: model.Task{
@@ -73,7 +80,7 @@ func TestUpdateSuccess(t *testing.T) {
 
 	h := NewTaskHandler(svc)
 
-	reader := strings.NewReader(`{"name":"Новая задача"}`)
+	reader := strings.NewReader(`{"name":"Новая задача", "user_id":1}`)
 	req := httptest.NewRequest(http.MethodPut, "/tasks/7", reader)
 	req.SetPathValue("id", "7")
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
@@ -137,7 +144,7 @@ func TestCreateAcceptsJSONContentTypeWithCharset(t *testing.T) {
 
 	h := NewTaskHandler(svc)
 
-	reader := strings.NewReader(`{"name":"Новая задача"}`)
+	reader := strings.NewReader(`{"name":"Новая задача", "user_id":1}`)
 
 	req := httptest.NewRequest(http.MethodPost, "/tasks", reader)
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
@@ -160,7 +167,7 @@ func TestCreateRejectsUnsupportedContentType(t *testing.T) {
 
 	h := NewTaskHandler(svc)
 
-	reader := strings.NewReader(`{"name":"Новая задача"}`)
+	reader := strings.NewReader(`{"name":"Новая задача", "user_id":1}`)
 
 	req := httptest.NewRequest(http.MethodPost, "/tasks", reader)
 	req.Header.Set("Content-Type", "text/plain")
@@ -187,7 +194,7 @@ func TestCreateSuccess(t *testing.T) {
 
 	h := NewTaskHandler(svc)
 
-	reader := strings.NewReader(`{"name":"Новая задача"}`)
+	reader := strings.NewReader(`{"name":"Новая задача", "user_id":1}`)
 	req := httptest.NewRequest(http.MethodPost, "/tasks", reader)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -231,7 +238,7 @@ func TestCreateRejectsMultipleJSONValues(t *testing.T) {
 
 	h := NewTaskHandler(svc)
 
-	reader := strings.NewReader(`{"name":"Первая"} {"name":"Вторая"}`)
+	reader := strings.NewReader(`{"name":"Первая", "user_id":1} {"name":"Вторая", "user_id":2}`)
 	req := httptest.NewRequest(http.MethodPost, "/tasks", reader)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -254,7 +261,7 @@ func TestCreateRejectsUnknownField(t *testing.T) {
 
 	h := NewTaskHandler(svc)
 
-	reader := strings.NewReader(`{"name":"Первая", "unexpected":"421"}`)
+	reader := strings.NewReader(`{"name":"Первая", "user_id":1, "unexpected":"421"}`)
 	req := httptest.NewRequest(http.MethodPost, "/tasks", reader)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -277,7 +284,7 @@ func TestCreateRejectsLargeBody(t *testing.T) {
 
 	h := NewTaskHandler(svc)
 
-	reader := strings.NewReader(`{"name":"` + strings.Repeat("a", 200) + `"}`)
+	reader := strings.NewReader(`{"name":"` + strings.Repeat("a", 4100) + `", "user_id":1}`)
 	req := httptest.NewRequest(http.MethodPost, "/tasks", reader)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -436,9 +443,9 @@ func TestCreateEmptyName(t *testing.T) {
 		createErr: model.ErrInvalidTaskName,
 	}
 	h := NewTaskHandler(svc)
-	reader := strings.NewReader(`{"name":""}`)
+	reader := strings.NewReader(`{"name":"", "user_id":1}`)
 
-	req := httptest.NewRequest("POST", "/tasks/1", reader)
+	req := httptest.NewRequest("POST", "/tasks", reader)
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
 	rec := httptest.NewRecorder()
@@ -447,6 +454,9 @@ func TestCreateEmptyName(t *testing.T) {
 
 	if rec.Code != 400 {
 		t.Fatalf("expected status 400, got %d ", rec.Code)
+	}
+	if svc.createCalls != 1 {
+		t.Fatalf("expected 1 service call, got %d", svc.createCalls)
 	}
 
 }
@@ -461,7 +471,7 @@ func TestUpdateTaskNotFound(t *testing.T) {
 
 	h := NewTaskHandler(svc)
 
-	reader := strings.NewReader(`{"name":"ууу"}`)
+	reader := strings.NewReader(`{"name":"ууу", "user_id":1}`)
 
 	req := httptest.NewRequest("PUT", "/tasks/27", reader)
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
@@ -544,5 +554,200 @@ func TestGetAllReturnsBadRequestForOutOfRangeLimit(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected bad request, got %d", rec.Code)
+	}
+}
+
+func TestCreateTaskZeroUserID(t *testing.T) {
+	svc := &taskServiceStub{
+		createInput: model.Task{
+			UserID: 0,
+		},
+	}
+	h := NewTaskHandler(svc)
+
+	reader := strings.NewReader(`{"name":"Новая задача", "user_id":0}`)
+	req := httptest.NewRequest(http.MethodPost, "/tasks", reader)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	rec := httptest.NewRecorder()
+
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected Status Created, got %d", rec.Code)
+	}
+	var body model.Task
+	err := json.NewDecoder(rec.Body).Decode(&body)
+	if err != nil {
+		t.Fatalf("expected zero errors with decode body, got %v", err)
+	}
+	if body.UserID != 0 {
+		t.Fatalf("expected UserId = 0, got %d", body.UserID)
+	}
+	if svc.createInput.UserID != body.UserID {
+		t.Fatalf("expected UserId:= %d, got %d", svc.createInput.UserID, body.UserID)
+	}
+	if svc.createCalls != 1 {
+		t.Fatalf("expected 1 calls service create, got %d", svc.createCalls)
+	}
+}
+
+func TestCreateTaskMissingUserID(t *testing.T) {
+	svc := &taskServiceStub{}
+	h := NewTaskHandler(svc)
+
+	reader := strings.NewReader(`{"name":"New task"}`)
+	req := httptest.NewRequest(http.MethodPost, "/tasks", reader)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	res := httptest.NewRecorder()
+
+	h.Create(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res.Code)
+	}
+}
+
+func TestCreateTaskGetId(t *testing.T) {
+	svc := &taskServiceStub{}
+	h := NewTaskHandler(svc)
+
+	reader := strings.NewReader(`{"id":22, "name":"New task", "user_id":1}`)
+	req := httptest.NewRequest(http.MethodPost, "/tasks", reader)
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	res := httptest.NewRecorder()
+
+	h.Create(res, req)
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res.Code)
+	}
+
+}
+
+func TestGetByIDRejectsNonPositiveID(t *testing.T) {
+	svc := &taskServiceStub{}
+	h := NewTaskHandler(svc)
+
+	req1 := httptest.NewRequest(http.MethodGet, "/tasks/0", nil)
+	req1.SetPathValue("id", "0")
+
+	res1 := httptest.NewRecorder()
+
+	req2 := httptest.NewRequest(http.MethodGet, "/tasks/-5", nil)
+	req2.SetPathValue("id", "-5")
+
+	res2 := httptest.NewRecorder()
+
+	h.GetByID(res1, req1)
+	h.GetByID(res2, req2)
+
+	if res1.Code != http.StatusBadRequest {
+		t.Fatalf("Expected bad request, got %d", res1.Code)
+	}
+	if res2.Code != http.StatusBadRequest {
+		t.Fatalf("Expected bad request, got %d", res2.Code)
+	}
+
+	if svc.getByIDCalls != 0 {
+		t.Fatalf("expected zero calls get by id service, got %d", svc.getByIDCalls)
+	}
+}
+
+func TestUpdateIDRejectsNonPositiveID(t *testing.T) {
+	svc := &taskServiceStub{}
+	h := NewTaskHandler(svc)
+
+	payload := `{"name":"new task","user_id":1}`
+
+	req1 := httptest.NewRequest(http.MethodPut, "/tasks/0", strings.NewReader(payload))
+	req1.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req1.SetPathValue("id", "0")
+
+	res1 := httptest.NewRecorder()
+
+	req2 := httptest.NewRequest(http.MethodPut, "/tasks/-5", strings.NewReader(payload))
+	req2.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req2.SetPathValue("id", "-5")
+
+	res2 := httptest.NewRecorder()
+
+	h.Update(res1, req1)
+	h.Update(res2, req2)
+
+	if res1.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res1.Code)
+	}
+	if res2.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res2.Code)
+	}
+
+	if svc.updateCalls != 0 {
+		t.Fatalf("expected zero calls update service, got %d", svc.updateCalls)
+	}
+}
+
+func TestDeleteIDRejectsNonPositiveID(t *testing.T) {
+	svc := &taskServiceStub{}
+	h := NewTaskHandler(svc)
+
+	req1 := httptest.NewRequest(http.MethodDelete, "/tasks/0", nil)
+	req1.SetPathValue("id", "0")
+
+	res1 := httptest.NewRecorder()
+
+	req2 := httptest.NewRequest(http.MethodDelete, "/tasks/-5", nil)
+	req2.SetPathValue("id", "-5")
+
+	res2 := httptest.NewRecorder()
+
+	h.Delete(res1, req1)
+	h.Delete(res2, req2)
+
+	if res1.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res1.Code)
+	}
+	if res2.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res2.Code)
+	}
+
+	if svc.deleteCalls != 0 {
+		t.Fatalf("expected zero calls update service, got %d", svc.deleteCalls)
+	}
+}
+
+func TestUpdateRejectsInvalidRequest(t *testing.T) {
+	svc := &taskServiceStub{}
+	h := NewTaskHandler(svc)
+
+	payload1 := `{"id":2, "name":"new task","user_id":1}`
+
+	req1 := httptest.NewRequest(http.MethodPut, "/tasks/5", strings.NewReader(payload1))
+	req1.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req1.SetPathValue("id", "5")
+
+	res1 := httptest.NewRecorder()
+
+	payload2 := `{"name":"new task"}`
+
+	req2 := httptest.NewRequest(http.MethodPut, "/tasks/5", strings.NewReader(payload2))
+	req2.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req2.SetPathValue("id", "5")
+
+	res2 := httptest.NewRecorder()
+
+	h.Update(res1, req1)
+	h.Update(res2, req2)
+
+	if res1.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res1.Code)
+	}
+	if res2.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res2.Code)
+	}
+
+	if svc.updateCalls != 0 {
+		t.Fatalf("expected zero calls update service, got %d", svc.updateCalls)
 	}
 }
