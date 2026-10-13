@@ -146,6 +146,16 @@ func headerCheck(r *http.Request) error {
 	}
 	return nil
 }
+func headerCheckInReader(w http.ResponseWriter) error {
+	mediaType, _, err := mime.ParseMediaType(w.Header().Get("Content-Type")) // парсирование Header на составные части
+	if err != nil {
+		return errors.New("expected application/json, got another")
+	}
+	if mediaType != "application/json" {
+		return errors.New("expected application/json, got another")
+	}
+	return nil
+}
 
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	err := headerCheck(r)
