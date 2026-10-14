@@ -2,11 +2,23 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
+func headerCheckInReader(w http.ResponseWriter) error {
+	mediaType, _, err := mime.ParseMediaType(w.Header().Get("Content-Type")) // парсирование Header на составные части
+	if err != nil {
+		return errors.New("expected application/json, got another")
+	}
+	if mediaType != "application/json" {
+		return errors.New("expected application/json, got another")
+	}
+	return nil
+}
 func TestWriteAPIError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	writeAPIError(rec, 400, "INVALID_TASK_ID", "Invalid task id", "req-123")

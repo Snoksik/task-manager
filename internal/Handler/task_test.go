@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -749,5 +750,46 @@ func TestUpdateRejectsInvalidRequest(t *testing.T) {
 
 	if svc.updateCalls != 0 {
 		t.Fatalf("expected zero calls update service, got %d", svc.updateCalls)
+	}
+}
+
+func TestGetByIDInternalError(t *testing.T) {
+	svc := &taskServiceStub{
+		getByIDErr: errors.New("internal database connection failure"),
+	}
+
+	h := NewTaskHandler(svc)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/tasks/5", nil)
+	req.SetPathValue("id", "5")
+
+	wrapped := RequestIDMiddleware(http.HandlerFunc(h.GetByID))
+	wrapped.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected Internal server error, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+
+	if strings.Contains(body, "internal database connection failure") {
+		t.Fatal("internal error details leaked to client")
+	}
+	var response ErrorResponse
+	err := json.NewDecoder(rec.Body).Decode(&response)
+	if err != nil {
+		t.Fatalf("expected zero errors with decode body, got %v", err)
+	}
+	if response.Error.Code != "INTERNAL_ERROR" {
+		t.Fatalf("expected code INTERNAL_ERROR, got %v", response.Error.Code)
+	}
+	if response.Error.Message != "Internal server error" {
+		t.Fatalf("expected code Internal server error, got %v", response.Error.Message)
+	}
+	if response.RequestID == "" {
+		t.Fatalf("expected not empty str, got emty")
+	}
+	if response.RequestID != rec.Result().Header.Get("X-Request-ID") {
+		t.Fatalf("expected equael request id, got %v", response.RequestID)
 	}
 }

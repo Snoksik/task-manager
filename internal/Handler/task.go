@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"strconv"
@@ -65,9 +65,11 @@ func parseQueryParams(r *http.Request) (model.TaskFilter, error) {
 }
 
 func (h *TaskHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+
 	filter, err := parseQueryParams(r)
 	if err != nil {
-		http.Error(w, model.ErrInvalidTaskFilter.Error(), 400)
+		writeAPIError(w, http.StatusBadRequest, "INVALID_TASK_FILTER", "Invalid task filter", requestID)
 		return
 	}
 
@@ -75,10 +77,13 @@ func (h *TaskHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, model.ErrInvalidTaskFilter):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, "INVALID_TASK_FILTER", "Invalid task filter", requestID)
+
 		default:
-			log.Printf("failed to get tasks: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			slog.Error("failed to get tasks",
+				"request_id", requestID,
+				"error", err)
+			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", requestID)
 		}
 		return
 	}
@@ -86,32 +91,40 @@ func (h *TaskHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(tasks); err != nil {
-		log.Printf("failed to encode tasks response: %v", err)
+		slog.Error(
+			"failed to encode tasks response",
+			"request_id", requestID,
+			"error", err)
 	}
 
 }
 
 func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-
+	requestID := requestIDFromContext(r.Context())
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil || id <= 0 {
-		http.Error(w, "invalid task id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "INVALID_TASK_ID", "Invalid task ID", requestID)
 		return
 	}
 	task, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, model.ErrTaskNotFound) {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			writeAPIError(w, http.StatusNotFound, "TASK_NOT_FOUND", "Task not found", requestID)
 			return
 		}
-		log.Printf("failed to get by id tasks response: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		slog.Error("failed to get task",
+			"request_id", requestID,
+			"error", err)
+		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", requestID)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(task); err != nil {
-		log.Printf("failed to encode tasks response: %v", err)
+		slog.Error(
+			"failed to encode tasks response",
+			"request_id", requestID,
+			"error", err)
 	}
 }
 
@@ -146,26 +159,17 @@ func headerCheck(r *http.Request) error {
 	}
 	return nil
 }
-func headerCheckInReader(w http.ResponseWriter) error {
-	mediaType, _, err := mime.ParseMediaType(w.Header().Get("Content-Type")) // парсирование Header на составные части
-	if err != nil {
-		return errors.New("expected application/json, got another")
-	}
-	if mediaType != "application/json" {
-		return errors.New("expected application/json, got another")
-	}
-	return nil
-}
 
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
 	err := headerCheck(r)
 	if err != nil {
-		http.Error(w, "expected application/json, got another", http.StatusUnsupportedMediaType)
+		writeAPIError(w, http.StatusUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json", requestID)
 		return
 	}
 	body, err := jsonHelper(w, r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "Invalid request body", requestID)
 		return
 	}
 	bodyTask := model.Task{
@@ -175,58 +179,70 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	task, err := h.service.Create(r.Context(), bodyTask)
 	if err != nil {
 		if errors.Is(err, model.ErrInvalidTaskName) {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, "INVALID_TASK_NAME", "Invalid task name", requestID)
 			return
 		}
 
-		log.Printf("failed to create task: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		slog.Error(
+			"failed to create task",
+			"request_id", requestID,
+			"error", err)
+		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", requestID)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(task); err != nil {
-		log.Printf("failed to encode tasks response: %v", err)
+		slog.Error(
+			"failed to encode tasks response",
+			"request_id", requestID,
+			"error", err)
 	}
 }
 
 func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
 
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil || id <= 0 {
-		http.Error(w, "invalid task id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "INVALID_TASK_ID", "Invalid task ID", requestID)
 		return
 	}
 
 	if err = h.service.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, model.ErrTaskNotFound) {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			writeAPIError(w, http.StatusNotFound, "TASK_NOT_FOUND", "Task not found", requestID)
 			return
 		}
-		log.Printf("failed to delete tasks response: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		slog.Error(
+			"failed to delete tasks response",
+			"request_id", requestID,
+			"error", err)
+		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", requestID)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
+	requestID := requestIDFromContext(r.Context())
+
 	err := headerCheck(r)
 	if err != nil {
-		http.Error(w, "expected application/json, got another", http.StatusUnsupportedMediaType)
+		writeAPIError(w, http.StatusUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json", requestID)
 		return
 	}
 
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil || id <= 0 {
-		http.Error(w, "invalid task id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "INVALID_TASK_ID", "Invalid task ID", requestID)
 		return
 	}
 
 	body, err := jsonHelper(w, r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "Invalid request body", requestID)
 		return
 	}
 	newTask := model.Task{
@@ -237,18 +253,24 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, model.ErrInvalidTaskName):
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, "INVALID_TASK_NAME", "Invalid task name", requestID)
 		case errors.Is(err, model.ErrTaskNotFound):
-			http.Error(w, err.Error(), http.StatusNotFound)
+			writeAPIError(w, http.StatusNotFound, "TASK_NOT_FOUND", "Task not found", requestID)
 		default:
-			log.Printf("failed to update task: %v", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			slog.Error(
+				"failed to update task",
+				"request_id", requestID,
+				"error", err)
+			writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Internal server error", requestID)
 		}
 		return
 	}
 	w.Header().Set("Content-type", "application/json")
 	if err = json.NewEncoder(w).Encode(task); err != nil {
-		log.Printf("failed to encode task response: %v", err)
+		slog.Error(
+			"failed to encode tasks response",
+			"request_id", requestID,
+			"error", err)
 	}
 
 }

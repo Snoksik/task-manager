@@ -45,7 +45,7 @@ func main() {
 
 	log.Println("starting server on http://localhost:8080")
 
-	if err := http.ListenAndServe("localhost:8080", mux); err != nil {
+	if err := http.ListenAndServe("localhost:8080", handler.RequestIDMiddleware(mux)); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
 }
