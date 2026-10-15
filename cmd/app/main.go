@@ -2,9 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	handler "github.com/Snoksik/task-manager/internal/Handler"
 	repository "github.com/Snoksik/task-manager/internal/Repository"
@@ -45,7 +50,48 @@ func main() {
 
 	log.Println("starting server on http://localhost:8080")
 
-	if err := http.ListenAndServe("localhost:8080", handler.RequestIDMiddleware(mux)); err != nil {
-		log.Fatalf("server failed: %v", err)
+	srv := &http.Server{
+		Addr:    "localhost:8080",
+		Handler: handler.RequestIDMiddleware(mux),
+
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
+	serverError := make(chan error, 1)
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			if !errors.Is(err, http.ErrServerClosed) {
+				serverError <- err
+			}
+			// slog.Debug("Server Closed")
+		}
+	}()
+
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case <-signalCtx.Done():
+		slog.Info("shutting down server")
+	case err := <-serverError:
+		slog.Error("server stopped unexpectedly", "error", err)
+		return
+	}
+
+	shutdownctx, cancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer cancel()
+
+	err = srv.Shutdown(shutdownctx)
+	if err != nil {
+		slog.Error("failed to shutdown server", "error", err)
+		return
+	}
+
+	slog.Info("server stopped successfully")
 }
