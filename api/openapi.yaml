@@ -3,38 +3,38 @@ openapi: 3.0.3
 info:
   title: Task Manager API
   version: 1.0.0
+  description: |
+    Учебный CRUD API задач с PostgreSQL.
+    Middleware генерирует новый X-Request-ID для каждого запроса;
+    переданный клиентом X-Request-ID не используется.
+    Ошибки обработчиков возвращаются в JSON, а request_id в теле
+    совпадает с X-Request-ID в заголовке ответа.
+    Ответы стандартного маршрутизатора на неизвестный путь или метод
+    могут иметь другой формат.
 
-components:
-  schemas:
-    Task:
-      type: object
-      properties:
-        id:
-          type: integer
-        name:
-          type: string
-        user_id:
-          type: integer
-      required:
-        - id
-        - name
-        - user_id
-        
+servers:
+  - url: http://localhost:8080
+    description: Локальный запуск
 
 paths:
   /tasks:
     get:
       summary: Получить список задач
+      description: Задачи возвращаются по возрастанию ID. Пустой результат — массив [].
       parameters:
         - name: search
           in: query
-          required: false
-          schema: 
+          allowEmptyValue: true
+          description: |
+            Поиск по имени через SQL LIKE с учётом регистра.
+            Символы % и _ сохраняют значение шаблонов LIKE.
+          schema:
             type: string
-            default: ""
+            default: ''
         - name: limit
           in: query
-          required: false
+          allowEmptyValue: true
+          description: Размер выборки. Отсутствующее или пустое значение заменяется на 10.
           schema:
             type: integer
             minimum: 1
@@ -42,130 +42,274 @@ paths:
             default: 10
         - name: offset
           in: query
-          required: false
+          allowEmptyValue: true
+          description: Число пропускаемых задач. Отсутствующее или пустое значение заменяется на 0.
           schema:
             type: integer
             minimum: 0
             default: 0
-          
       responses:
-        "200":
-          description: Список задач успешно получен
+        '200':
+          description: Список задач
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
           content:
             application/json:
               schema:
                 type: array
-                items: 
+                items:
                   $ref: '#/components/schemas/Task'
-        "400":
-          description: Некорректные параметры фильтрации
-        "500":
-          description: Внутренняя ошибка сервера
+        '400':
+          $ref: '#/components/responses/InvalidTaskFilter'
+        '500':
+          $ref: '#/components/responses/InternalError'
     post:
-      summary: Создать новую задачу
+      summary: Создать задачу
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                user_id:
-                  type: integer
-              required:
-                - name
-                - user_id
+        $ref: '#/components/requestBodies/TaskInput'
       responses:
-        "201":
-          description: Задача успешно создана
+        '201':
+          description: Задача создана
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
-        "400":
-          description: Некорректные данные для создания задачи
-        "415":
-          description: Неподдерживаемый тип содержимого
-        "500":
-          description: Ошибка сервера
+        '400':
+          $ref: '#/components/responses/InvalidTaskInput'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /tasks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Положительный целочисленный идентификатор задачи
+        schema:
+          type: integer
+          minimum: 1
     get:
       summary: Получить задачу по ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Идентификатор задачи
-          schema:
-            type: integer
       responses:
-        "200": 
-          description: Задача успешно найдена
+        '200':
+          description: Задача найдена
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
-        "400":
-          description: Некорректный ID
-        "404": 
-          description: Задача не найдена
-        "500":
-          description: Ошибка сервера
+        '400':
+          $ref: '#/components/responses/InvalidTaskID'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
     put:
-      summary: Обновить задачу по ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Идентификатор задачи
-          schema:
-            type: integer
+      summary: Обновить имя и user_id задачи
+      description: Оба поля передаются в теле. Частичное обновление не поддерживается.
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                user_id:
-                  type: integer
-              required:
-                - name
-                - user_id
+        $ref: '#/components/requestBodies/TaskInput'
       responses:
-        "200":
-          description: Задача успешно обновлена
+        '200':
+          description: Задача обновлена
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
-        "400":
-          description: Некорректные данные для обновления задачи
-        "404": 
-          description: Задача не найдена
-        "415":
-          description: Неподдерживаемый тип содержимого
-        "500":
-          description: Ошибка сервера
+        '400':
+          $ref: '#/components/responses/InvalidTaskUpdate'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
     delete:
       summary: Удалить задачу по ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Идентификатор задачи
-          schema:
-            type: integer
       responses:
-        "204":
-          description: Задача успешно удалена
-        "400":
-          description: Некорректный ID
-        "404":
-          description: Задача не найдена
-        "500":
-          description: Ошибка сервера
+        '204':
+          description: Задача удалена, тело ответа отсутствует
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+        '400':
+          $ref: '#/components/responses/InvalidTaskID'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  headers:
+    RequestID:
+      description: Сгенерированный сервером идентификатор запроса
+      schema:
+        type: string
+        minLength: 1
+
+  schemas:
+    Task:
+      type: object
+      required: [id, name, user_id]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        user_id:
+          type: integer
+          format: int64
+      example:
+        id: 1
+        name: Изучить PostgreSQL
+        user_id: 1
+
+    TaskInput:
+      type: object
+      additionalProperties: false
+      required: [name, user_id]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: |
+            Пробельные символы по краям удаляются через strings.TrimSpace.
+            Пустое имя после этой обработки отклоняется.
+        user_id:
+          type: integer
+          format: int64
+          description: |
+            Поле обязательно; null не допускается. Нулевые и отрицательные
+            значения код не запрещает. Существование пользователя не проверяется.
+      example:
+        name: Изучить PostgreSQL
+        user_id: 1
+
+    ErrorResponse:
+      type: object
+      required: [error, request_id]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - INVALID_TASK_FILTER
+                - INVALID_TASK_ID
+                - INVALID_REQUEST_BODY
+                - INVALID_TASK_NAME
+                - TASK_NOT_FOUND
+                - UNSUPPORTED_MEDIA_TYPE
+                - INTERNAL_ERROR
+            message:
+              type: string
+        request_id:
+          type: string
+          minLength: 1
+          description: Совпадает с X-Request-ID в заголовке ответа
+  requestBodies:
+    TaskInput:
+      required: true
+      description: |
+        Один JSON-объект, не более 4096 байт. Неизвестные поля, включая id,
+        и несколько JSON-значений отклоняются с 400 INVALID_REQUEST_BODY.
+        Отсутствующий или null user_id также даёт INVALID_REQUEST_BODY;
+        пустое после TrimSpace, отсутствующее или null имя — INVALID_TASK_NAME.
+        Требуется Content-Type application/json; параметр charset допускается.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TaskInput'
+
+  responses:
+    InvalidTaskFilter:
+      description: |
+        INVALID_TASK_FILTER — limit или offset не являются целыми числами,
+        limit вне диапазона 1–100 либо offset меньше 0.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidTaskID:
+      description: INVALID_TASK_ID — ID не является целым числом либо меньше 1.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidTaskInput:
+      description: |
+        INVALID_REQUEST_BODY — некорректное тело, лишние поля, отсутствующий
+        или null user_id, превышение лимита тела.
+        INVALID_TASK_NAME — пустое после TrimSpace, отсутствующее или null имя.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidTaskUpdate:
+      description: |
+        INVALID_TASK_ID — некорректный ID.
+        INVALID_REQUEST_BODY — некорректное тело, лишние поля, отсутствующий
+        или null user_id, превышение лимита тела.
+        INVALID_TASK_NAME — пустое после TrimSpace, отсутствующее или null имя.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TaskNotFound:
+      description: TASK_NOT_FOUND — задача с таким ID не найдена.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: TASK_NOT_FOUND
+              message: Task not found
+            request_id: example-request-id
+    UnsupportedMediaType:
+      description: UNSUPPORTED_MEDIA_TYPE — отсутствует или некорректен Content-Type application/json.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: INTERNAL_ERROR — внутренняя ошибка, подробности записываются в лог.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
